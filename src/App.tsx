@@ -8,6 +8,8 @@ import {
   Trophy,
   CheckCircle2,
   Briefcase,
+  LogOut,
+  User,
 } from 'lucide-react';
 import { ALL_LESSONS } from './data/curriculum';
 import { getSchemaInfo, initMainDatabase } from './db/sqlEngine';
@@ -19,11 +21,21 @@ import { ErDiagramView } from './components/ErDiagramView';
 import { CheatSheetView } from './components/CheatSheetView';
 import { QuizView } from './components/QuizView';
 import { CaseStudiesView } from './components/CaseStudiesView';
+import { LoginView } from './components/LoginView';
 import { MeowMascot } from './components/MeowMascot';
 
 type ActiveTab = 'roadmap' | 'lesson' | 'cases' | 'playground' | 'er' | 'cheatsheet' | 'quiz';
 
 const STORAGE_KEY = 'meowsql_progress_v1';
+const AUTH_STORAGE_KEY = 'meowsql_auth_user_v1';
+
+function loadAuthUser(): string | null {
+  try {
+    return localStorage.getItem(AUTH_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
 
 interface StoredProgress {
   completedIds: string[];
@@ -47,6 +59,7 @@ function loadProgress(): StoredProgress {
 }
 
 export function App() {
+  const [currentUser, setCurrentUser] = useState<string | null>(loadAuthUser);
   const [activeTab, setActiveTab] = useState<ActiveTab>('roadmap');
   const [activeLesson, setActiveLesson] = useState<Lesson>(ALL_LESSONS[0]);
   const [playgroundInitSql, setPlaygroundInitSql] = useState<string | undefined>(undefined);
@@ -123,45 +136,61 @@ export function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleLoginSuccess = (username: string, remember: boolean) => {
+    setCurrentUser(username);
+    try {
+      if (remember) {
+        localStorage.setItem(AUTH_STORAGE_KEY, username);
+      } else {
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+      }
+    } catch {
+      // Ignore storage quota errors
+    }
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    try {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+    } catch {
+      // Ignore storage quota errors
+    }
+  };
+
+  if (!currentUser) {
+    return <LoginView onLoginSuccess={handleLoginSuccess} />;
+  }
+
   const activeLessonIndex = ALL_LESSONS.findIndex((l) => l.id === activeLesson.id);
 
   const navItems: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
-    { id: 'roadmap', label: 'Lộ trình học', icon: <Map className="w-4 h-4" /> },
-    { id: 'cases', label: 'Case thực chiến', icon: <Briefcase className="w-4 h-4" /> },
-    { id: 'playground', label: 'DataLab SQL', icon: <Terminal className="w-4 h-4" /> },
-    { id: 'er', label: 'Sơ đồ bảng', icon: <Network className="w-4 h-4" /> },
-    { id: 'cheatsheet', label: 'Tra cứu nhanh', icon: <BookMarked className="w-4 h-4" /> },
-    { id: 'quiz', label: 'Trắc nghiệm', icon: <HelpCircle className="w-4 h-4" /> },
+    { id: 'roadmap', label: 'Lộ trình', icon: <Map className="w-4 h-4 shrink-0" /> },
+    { id: 'cases', label: 'Case thực chiến', icon: <Briefcase className="w-4 h-4 shrink-0" /> },
+    { id: 'playground', label: 'SQL Lab', icon: <Terminal className="w-4 h-4 shrink-0" /> },
+    { id: 'er', label: 'Sơ đồ bảng', icon: <Network className="w-4 h-4 shrink-0" /> },
+    { id: 'cheatsheet', label: 'Tra cứu', icon: <BookMarked className="w-4 h-4 shrink-0" /> },
+    { id: 'quiz', label: 'Trắc nghiệm', icon: <HelpCircle className="w-4 h-4 shrink-0" /> },
   ];
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F8FAFC]">
       {/* Top Navbar */}
       <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2 sm:gap-4">
           {/* Brand Logo */}
           <button
             onClick={() => setActiveTab('roadmap')}
-            className="flex items-center gap-2.5 text-left shrink-0"
+            className="flex items-center gap-2 text-left shrink-0"
           >
-            <MeowMascot mood="happy" size={38} />
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-display font-extrabold text-lg tracking-tight text-slate-900">
-                  Meow<span className="text-brand-500">SQL</span>
-                </span>
-                <span className="hidden sm:inline-block text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded-md bg-edu-50 text-edu-700 border border-edu-100">
-                  DataLab
-                </span>
-              </div>
-              <p className="hidden sm:block text-[11px] text-slate-500 font-medium -mt-0.5">
-                Lý thuyết trực quan · Thực hành SQLite
-              </p>
-            </div>
+            <MeowMascot mood="happy" size={36} />
+            <span className="font-display font-extrabold text-lg sm:text-xl tracking-tight text-slate-900 whitespace-nowrap">
+              Meow<span className="text-brand-500">SQL</span>
+            </span>
           </button>
 
-          {/* Navigation Pills */}
-          <nav className="hidden md:flex items-center gap-1 bg-slate-100 p-1 rounded-2xl">
+          {/* Desktop Navigation Pills (1024px+) */}
+          <nav className="hidden lg:flex items-center gap-1 bg-slate-100 p-1 rounded-2xl min-w-0">
             {navItems.map((item) => {
               const isActive =
                 activeTab === item.id || (activeTab === 'lesson' && item.id === 'roadmap');
@@ -169,34 +198,46 @@ export function App() {
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  className={`inline-flex items-center gap-1.5 px-2.5 xl:px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all ${
                     isActive
                       ? 'bg-white text-slate-900 shadow-sm'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   {item.icon}
-                  {item.label}
+                  <span>{item.label}</span>
                 </button>
               );
             })}
           </nav>
 
           {/* Right User Progress */}
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-extrabold">
-              <Trophy className="w-3.5 h-3.5 text-brand-500" />
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <div className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-extrabold whitespace-nowrap">
+              <Trophy className="w-3.5 h-3.5 text-brand-500 shrink-0" />
               {progress.xp} XP
             </div>
-            <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-extrabold">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+            <div className="hidden xl:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-extrabold whitespace-nowrap">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
               {progress.completedIds.length}/{ALL_LESSONS.length}
+            </div>
+            <div className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-xl bg-slate-100 border border-slate-200 text-slate-800 text-xs font-bold whitespace-nowrap">
+              <User className="w-3.5 h-3.5 text-edu-600 shrink-0" />
+              <span className="max-w-[72px] sm:max-w-none truncate">{currentUser}</span>
+              <button
+                onClick={handleLogout}
+                className="p-1 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-white transition-colors"
+                title="Đăng xuất"
+                aria-label="Đăng xuất"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Mobile Nav Bar */}
-        <div className="md:hidden border-t border-slate-100 px-3 py-1.5 flex items-center gap-1 overflow-x-auto">
+        {/* Mobile & Tablet Nav Bar (< 1024px) */}
+        <div className="lg:hidden border-t border-slate-100 px-3 sm:px-6 py-2 flex items-center gap-1.5 overflow-x-auto">
           {navItems.map((item) => {
             const isActive =
               activeTab === item.id || (activeTab === 'lesson' && item.id === 'roadmap');
@@ -204,14 +245,14 @@ export function App() {
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold ${
+                className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors ${
                   isActive
-                    ? 'bg-slate-900 text-white'
-                    : 'text-slate-600 bg-slate-100'
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'text-slate-600 bg-slate-100 hover:bg-slate-200/70'
                 }`}
               >
                 {item.icon}
-                {item.label}
+                <span>{item.label}</span>
               </button>
             );
           })}
